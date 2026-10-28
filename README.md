@@ -136,15 +136,20 @@ Se o objetivo é reduzir o atrito com os funcionários, o caminho mais seguro
 avisando que o suporte técnico pode acessar o aparelho remotamente — e não
 tentar tornar isso invisível.
 
-## Mapa da frota: por que CartoDB e não OpenStreetMap direto
+## Mapa da frota: por que Esri e não OpenStreetMap/CartoDB direto
 
-O fundo do mapa usa tiles do CartoDB (`basemaps.cartocdn.com`), não do
-`tile.openstreetmap.org` direto. O OSM **bloqueia** (erro 403, "Access
-blocked") pedidos vindos de um arquivo local ou de um app desktop embutido
-assim, por política de uso deles (veja `osm.wiki/Blocked`) — não é algo
-que dá pra contornar, é deliberado da parte deles. O CartoDB é gratuito,
-não pede chave de API, e é o que a maioria dos dashboards usa exatamente
-por causa dessa restrição.
+Já troquei o provedor do fundo do mapa duas vezes:
+- `tile.openstreetmap.org` direto **bloqueia** (erro 403) acesso vindo de
+  um arquivo local ou app embutido assim, por política deles.
+- O CartoDB (`basemaps.cartocdn.com`) passou a **exigir chave de API**
+  mesmo no uso gratuito.
+
+Por isso o mapa usa o Esri (`server.arcgisonline.com`), que não pede
+chave e aceita esse tipo de uso. Se um dia ele também parar de funcionar
+(provedores de tile gratuito mudam de política de vez em quando), a
+solução mais estável a longo prazo é usar um provedor com chave de API
+de verdade (MapTiler, Stadia Maps — ambos têm plano gratuito com
+cadastro) em vez de ficar trocando entre serviços "sem chave".
 
 ## Configurar o Supabase
 

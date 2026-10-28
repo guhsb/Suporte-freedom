@@ -450,13 +450,12 @@ async function abrirMapaFrota() {
 
   if (!leafletMap) {
     leafletMap = L.map("mapaFrota").setView([-23.55, -46.63], 11); // ponto inicial: SP
-    // Usa o CartoDB em vez do tile.openstreetmap.org direto: o OSM bloqueia
-    // (erro 403) acesso vindo de um arquivo local/app desktop embutido assim,
-    // por política deles (ver osm.wiki/Blocked) — o CartoDB aceita esse uso
-    // sem precisar de chave de API.
-    L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
-      attribution: "&copy; OpenStreetMap &copy; CARTO",
-      subdomains: "abcd",
+    // tile.openstreetmap.org bloqueia acesso de app embutido (ver README),
+    // e o CartoDB passou a exigir chave de API. Usando o Esri, que não pede
+    // chave e aceita esse tipo de uso — reparem que a ordem é {z}/{y}/{x},
+    // diferente do padrão OSM/CartoDB ({z}/{x}/{y}).
+    L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}", {
+      attribution: "Tiles &copy; Esri",
       maxZoom: 19,
     }).addTo(leafletMap);
     setTimeout(() => leafletMap.invalidateSize(), 200);
