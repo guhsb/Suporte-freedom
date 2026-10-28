@@ -1,0 +1,30 @@
+# Sobe o servidor de sinalização e um servidor TURN (coturn) juntos.
+# O TURN é necessário para o WebRTC conseguir conectar quando o celular
+# está em redes 4G/Wi-Fi com NAT (quase sempre).
+#
+# Uso:
+#   1. Troque SEU_DOMINIO_OU_IP e as credenciais do TURN abaixo.
+#   2. docker compose up -d
+#
+version: "3.8"
+services:
+  signaling:
+    build: .
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+  turn:
+    image: coturn/coturn:latest
+    network_mode: host
+    restart: unless-stopped
+    command: >
+      -n
+      --realm=remote.cbfreedom.com.br
+      --listening-port=3478
+      --min-port=49160
+      --max-port=49200
+      --user=freedom:TROCAR_SENHA_FORTE
+      --no-cli
+      --no-tls
+      --no-dtls

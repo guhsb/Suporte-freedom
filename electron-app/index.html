@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Acesso Remoto — Freedom</title>
+<script src="vendor/supabase/supabase.js"></script>
+<script src="vendor/qrcode/qrcode.min.js"></script>
+<link rel="stylesheet" href="vendor/leaflet/leaflet.css" />
+<script src="vendor/leaflet/leaflet.js"></script>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --border: #2a2f3a;
+    --text: #e8eaed;
+    --muted: #9aa3b2;
+    --accent: #4f8cff;
+    --accent-on: #2ecc71;
+    --danger: #e5484d;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+  header {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+    background: var(--panel);
+  }
+  header input {
+    background: #0c0e12;
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px 10px;
+    border-radius: 6px;
+    width: 170px;
+  }
+  button {
+    background: #22262f;
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+  }
+  button:hover { background: #2a2f3a; }
+  button.primary { background: var(--accent); border-color: var(--accent); }
+  button.on { background: var(--accent-on); border-color: var(--accent-on); color: #0a1a0f; }
+  button.off-danger { background: var(--danger); border-color: var(--danger); }
+  .status { font-size: 13px; color: var(--muted); margin-left: auto; }
+  main {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    background: #000;
+    overflow: hidden;
+  }
+  #remoteVideo {
+    max-width: 100%;
+    max-height: 100%;
+    cursor: crosshair;
+  }
+  #overlayMsg {
+    position: absolute;
+    color: var(--muted);
+    font-size: 15px;
+    text-align: center;
+    padding: 0 20px;
+  }
+  .badge {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    padding: 4px 10px;
+    border-radius: 100px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .badge.view { background: #2a2f3a; color: var(--muted); }
+  .badge.control { background: var(--accent-on); color: #0a1a0f; }
+
+  /* Tela de login */
+  #loginScreen {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .login-box {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 28px;
+    width: 320px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .login-box h2 { margin: 0 0 4px 0; font-size: 18px; }
+  .login-box input {
+    width: 100%;
+    background: #0c0e12;
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 10px;
+    border-radius: 6px;
+  }
+  .login-box .erro { color: var(--danger); font-size: 13px; min-height: 16px; }
+
+  /* Modal de pareamento */
+  .modal-backdrop {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .modal {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+    padding: 24px; display: flex; flex-direction: column; align-items: center; gap: 12px;
+  }
+  .modal canvas { border-radius: 8px; }
+  .modal .device-id { font-size: 13px; color: var(--muted); }
+
+  #frotaBackdrop {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 50;
+    display: none; align-items: center; justify-content: center;
+  }
+  #frotaBox {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+    width: 90vw; height: 85vh; display: flex; flex-direction: column; overflow: hidden;
+  }
+  #frotaBox header { justify-content: space-between; }
+  #mapaFrota { flex: 1; }
+</style>
+</head>
+<body>
+
+<!-- TELA DE LOGIN -->
+<div id="loginScreen">
+  <div class="login-box">
+    <h2>Suporte Remoto — Freedom</h2>
+    <input id="loginEmail" type="email" placeholder="E-mail do admin" />
+    <input id="loginPassword" type="password" placeholder="Senha" />
+    <div class="erro" id="loginErro"></div>
+    <button id="btnLogin" class="primary">Entrar</button>
+  </div>
+</div>
+
+<!-- APP PRINCIPAL (só aparece depois do login) -->
+<div id="appScreen" style="display:none; flex:1; flex-direction:column;">
+  <header>
+    <input id="supaUrl" placeholder="URL do projeto Supabase" />
+    <input id="supaKey" placeholder="anon key" />
+    <input id="deviceId" placeholder="ID do celular" />
+    <button id="btnConnect" class="primary">Conectar</button>
+    <button id="btnPair">📱 Parear novo aparelho</button>
+    <button id="btnFrota">🗺️ Mapa da frota</button>
+    <button id="btnMode">Modo: Visualizar</button>
+    <button id="btnMic">🎤 Microfone ligado</button>
+    <button id="btnDisconnect" class="off-danger" disabled>Desconectar</button>
+    <span class="status" id="status">Desconectado</span>
+    <button id="btnLogout">Sair</button>
+  </header>
+
+  <main>
+    <video id="remoteVideo" autoplay playsinline></video>
+    <div id="overlayMsg">Informe o ID do celular (ou pareie um novo) e clique em Conectar.</div>
+    <div id="modeBadge" class="badge view" style="display:none">VISUALIZANDO</div>
+  </main>
+</div>
+
+<!-- MAPA DA FROTA -->
+<div id="frotaBackdrop">
+  <div id="frotaBox">
+    <header>
+      <strong>Localização da frota</strong>
+      <span class="status" id="frotaStatus"></span>
+      <button id="btnFecharFrota">Fechar</button>
+    </header>
+    <div id="mapaFrota"></div>
+    <div id="resumoDia" style="padding:10px 16px; font-size:13px; color:var(--muted);"></div>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const videoEl = $("remoteVideo");
+const overlay = $("overlayMsg");
+const statusEl = $("status");
+const modeBadge = $("modeBadge");
+
+let supabase = null;
+let channel = null;
+let pc = null;
+let dataChannel = null;
+let localMicStream = null;
+let micEnabled = true;
+let controlEnabled = false;
+
+const ICE_SERVERS = [
+  { urls: "stun:stun.l.google.com:19302" },
+  // { urls: "turn:remote.cbfreedom.com.br:3478", username: "freedom", credential: "TROCAR_SENHA_FORTE" }
+];
+
+function setStatus(text) { statusEl.textContent = text; }
+function setOverlay(text) {
+  overlay.style.display = text ? "block" : "none";
+  overlay.textContent = text || "";
+}
+
+// --- LOGIN ---
+// O admin preenche a URL/key do Supabase antes de logar (só precisa fazer
+// isso uma vez por máquina — ficam salvas no localStorage deste navegador).
+// Valores padrão do projeto Supabase — já preenchidos pra não precisar
+// colar toda vez. Dá pra trocar aqui se um dia mudar de projeto.
+const DEFAULT_SUPA_URL = "https://sowzpowxglmyerdopswr.supabase.co";
+const DEFAULT_SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNvd3pwb3d4Z2xteWVyZG9wc3dyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMxOTg4MzEsImV4cCI6MjEwODc3NDgzMX0.NZ_AgZ1koZZw32KkwnaX1KDxl2iz5Zk-OOh-qsIT7Aw";
+
+function restoreSupabaseConfig() {
+  $("supaUrl").value = localStorage.getItem("supaUrl") || DEFAULT_SUPA_URL;
+  $("supaKey").value = localStorage.getItem("supaKey") || DEFAULT_SUPA_KEY;
+}
+restoreSupabaseConfig();
+
+$("btnLogin").addEventListener("click", doLogin);
+
+async function doLogin() {
+  const url = $("supaUrl").value.trim() || prompt("URL do projeto Supabase:");
+  const key = $("supaKey").value.trim() || prompt("anon key:");
+  const email = $("loginEmail").value.trim();
+  const password = $("loginPassword").value;
+
+  if (!url || !key || !email || !password) {
+    $("loginErro").textContent = "Preencha e-mail, senha e os dados do Supabase.";
+    return;
+  }
+
+  localStorage.setItem("supaUrl", url);
+  localStorage.setItem("supaKey", key);
+  $("supaUrl").value = url;
+  $("supaKey").value = key;
+
+  supabase = window.supabase.createClient(url, key);
+  const { error } = await supabase.auth.signInWithPassword({ email, password });
+
+  if (error) {
+    $("loginErro").textContent = "Login inválido: " + error.message;
+    return;
+  }
+
+  $("loginScreen").style.display = "none";
+  $("appScreen").style.display = "flex";
+}
+
+$("btnLogout").addEventListener("click", async () => {
+  if (supabase) await supabase.auth.signOut();
+  disconnect();
+  $("appScreen").style.display = "none";
+  $("loginScreen").style.display = "flex";
+});
+
+// --- PAREAMENTO POR QR CODE ---
+// Gera um deviceId novo + grava uma linha em "devices" (pareado = false) e
+// mostra um QR com {supabaseUrl, supabaseKey, deviceId} para o celular
+// escanear na primeira abertura do app (ver android-app/.../QRScanActivity.kt).
+$("btnPair").addEventListener("click", gerarQrPareamento);
+
+async function gerarQrPareamento() {
+  const deviceId = "dev-" + crypto.randomUUID().slice(0, 8);
+  const url = $("supaUrl").value.trim();
+  const key = $("supaKey").value.trim();
+
+  await supabase.from("devices").insert({ id: deviceId, pareado: false });
+
+  const payload = JSON.stringify({ supabaseUrl: url, supabaseKey: key, deviceId });
+
+  const backdrop = document.createElement("div");
+  backdrop.className = "modal-backdrop";
+  backdrop.innerHTML = `
+    <div class="modal">
+      <h3>Escaneie no celular</h3>
+      <canvas id="qrCanvas"></canvas>
+      <div class="device-id">ID gerado: ${deviceId}</div>
+      <button id="btnFecharQr">Fechar</button>
+    </div>`;
+  document.body.appendChild(backdrop);
+  QRCode.toCanvas(document.getElementById("qrCanvas"), payload, { width: 260 });
+  document.getElementById("btnFecharQr").onclick = () => backdrop.remove();
+
+  $("deviceId").value = deviceId;
+}
+
+// --- CONEXÃO (igual antes) ---
+async function connect() {
+  const deviceId = $("deviceId").value.trim();
+  if (!deviceId) { alert("Informe o ID do celular."); return; }
+
+  $("btnConnect").disabled = true;
+  setStatus("Conectando...");
+
+  channel = supabase.channel(`device-${deviceId}`, {
+    config: { broadcast: { self: false }, presence: { key: "controller" } },
+  });
+
+  channel.on("broadcast", { event: "signal" }, ({ payload }) => handleSignal(payload));
+  channel.on("presence", { event: "sync" }, () => {
+    const state = channel.presenceState();
+    if (state["device"] && state["device"].length > 0) {
+      setStatus("Celular disponível. Iniciando conexão de vídeo...");
+      startPeerConnection().then(makeOffer);
+    }
+  });
+
+  channel.subscribe(async (status) => {
+    if (status === "SUBSCRIBED") {
+      await channel.track({ role: "controller" });
+      setStatus("Aguardando o celular ficar disponível...");
+      $("btnDisconnect").disabled = false;
+      try {
+        localMicStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      } catch (e) { console.warn(e); }
+    }
+  });
+}
+
+function sendSignal(type, data) {
+  channel.send({ type: "broadcast", event: "signal", payload: { type, ...data } });
+}
+
+async function handleSignal(msg) {
+  if (msg.type === "sdp-answer") {
+    await pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+  } else if (msg.type === "ice-candidate") {
+    try { await pc.addIceCandidate(msg.candidate); } catch (e) { console.warn(e); }
+  }
+}
+
+async function startPeerConnection() {
+  pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+  pc.onicecandidate = (e) => { if (e.candidate) sendSignal("ice-candidate", { candidate: e.candidate }); };
+  pc.ontrack = (e) => {
+    videoEl.srcObject = e.streams[0];
+    setOverlay(null);
+    modeBadge.style.display = "block";
+    setStatus("Conectado — recebendo tela do celular.");
+  };
+  dataChannel = pc.createDataChannel("control");
+  if (localMicStream) {
+    localMicStream.getAudioTracks().forEach((t) => { t.enabled = false; pc.addTrack(t, localMicStream); });
+    micEnabled = false;
+    updateMicButton();
+  }
+}
+
+async function makeOffer() {
+  const offer = await pc.createOffer({ offerToReceiveVideo: true, offerToReceiveAudio: true });
+  await pc.setLocalDescription(offer);
+  sendSignal("sdp-offer", { sdp: offer });
+}
+
+function teardownPeer() {
+  if (pc) { pc.close(); pc = null; }
+  videoEl.srcObject = null;
+  modeBadge.style.display = "none";
+  setOverlay("Sessão encerrada.");
+}
+
+function disconnect() {
+  if (channel && supabase) supabase.removeChannel(channel);
+  teardownPeer();
+  if (localMicStream) { localMicStream.getTracks().forEach((t) => t.stop()); localMicStream = null; }
+  $("btnConnect").disabled = false;
+  $("btnDisconnect").disabled = true;
+  setStatus("Desconectado");
+  setOverlay("Informe o ID do celular (ou pareie um novo) e clique em Conectar.");
+}
+
+function sendControlMsg(obj) {
+  if (dataChannel && dataChannel.readyState === "open") dataChannel.send(JSON.stringify(obj));
+}
+
+$("btnMode").addEventListener("click", () => {
+  controlEnabled = !controlEnabled;
+  $("btnMode").textContent = controlEnabled ? "Modo: Controlar" : "Modo: Visualizar";
+  $("btnMode").className = controlEnabled ? "on" : "";
+  modeBadge.textContent = controlEnabled ? "CONTROLANDO" : "VISUALIZANDO";
+  modeBadge.className = "badge " + (controlEnabled ? "control" : "view");
+  if (channel) sendSignal("control-mode", { enabled: controlEnabled });
+});
+
+$("btnMic").addEventListener("click", () => {
+  if (!localMicStream) return;
+  micEnabled = !micEnabled;
+  localMicStream.getAudioTracks().forEach((t) => (t.enabled = micEnabled));
+  updateMicButton();
+  if (channel) sendSignal("mic-mute", { muted: !micEnabled });
+});
+
+function updateMicButton() {
+  $("btnMic").textContent = micEnabled ? "🎤 Microfone ligado" : "🔇 Microfone mutado";
+  $("btnMic").className = micEnabled ? "" : "off-danger";
+}
+
+let dragStart = null;
+videoEl.addEventListener("mousedown", (e) => { if (controlEnabled) dragStart = getNormalizedCoords(e); });
+videoEl.addEventListener("mouseup", (e) => {
+  if (!controlEnabled || !dragStart) return;
+  const end = getNormalizedCoords(e);
+  const dist = Math.hypot(end.x - dragStart.x, end.y - dragStart.y);
+  if (dist < 0.01) sendControlMsg({ type: "tap", x: dragStart.x, y: dragStart.y });
+  else sendControlMsg({ type: "swipe", x1: dragStart.x, y1: dragStart.y, x2: end.x, y2: end.y, durationMs: 200 });
+  dragStart = null;
+});
+function getNormalizedCoords(e) {
+  const rect = videoEl.getBoundingClientRect();
+  return { x: (e.clientX - rect.left) / rect.width, y: (e.clientY - rect.top) / rect.height };
+}
+
+$("btnConnect").addEventListener("click", connect);
+$("btnDisconnect").addEventListener("click", disconnect);
+
+// --- MAPA DA FROTA ---
+// Mostra a última localização conhecida de cada aparelho (gravada pelo
+// próprio app Android a cada ~15min, independente de ter sessão de suporte
+// aberta). Isso é rastreamento de patrimônio da empresa, não ligado ao
+// controle de tela/áudio.
+let leafletMap = null;
+let leafletMarkers = [];
+
+$("btnFrota").addEventListener("click", abrirMapaFrota);
+$("btnFecharFrota").addEventListener("click", () => {
+  $("frotaBackdrop").style.display = "none";
+});
+
+async function abrirMapaFrota() {
+  $("frotaBackdrop").style.display = "flex";
+  $("frotaStatus").textContent = "Carregando...";
+
+  if (!leafletMap) {
+    leafletMap = L.map("mapaFrota").setView([-23.55, -46.63], 11); // ponto inicial: SP
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: "&copy; OpenStreetMap",
+    }).addTo(leafletMap);
+    setTimeout(() => leafletMap.invalidateSize(), 200);
+  }
+
+  await carregarAparelhosNoMapa();
+}
+
+async function carregarAparelhosNoMapa() {
+  const { data, error } = await supabase
+    .from("devices")
+    .select("id, nome, latitude, longitude, localizacao_atualizada_em")
+    .not("latitude", "is", null);
+
+  if (error) {
+    $("frotaStatus").textContent = "Erro ao carregar: " + error.message;
+    return;
+  }
+
+  leafletMarkers.forEach((m) => leafletMap.removeLayer(m));
+  leafletMarkers = [];
+
+  data.forEach((d) => {
+    const marker = L.marker([d.latitude, d.longitude]).addTo(leafletMap);
+    const quando = d.localizacao_atualizada_em
+      ? new Date(d.localizacao_atualizada_em).toLocaleString("pt-BR")
+      : "desconhecido";
+    marker.bindPopup(
+      `<b>${d.nome || d.id}</b><br>Atualizado em: ${quando}<br>` +
+      `<input type="date" id="dataTrajeto-${d.id}" value="${new Date().toISOString().slice(0,10)}" /><br>` +
+      `<button onclick="verTrajetoDoDia('${d.id}', document.getElementById('dataTrajeto-${d.id}').value)">Ver trajeto desse dia</button>`
+    );
+    leafletMarkers.push(marker);
+  });
+
+  if (data.length > 0) {
+    leafletMap.fitBounds(data.map((d) => [d.latitude, d.longitude]), { padding: [30, 30] });
+  }
+
+  $("frotaStatus").textContent = `${data.length} aparelho(s) com localização`;
+}
+
+let trajetoLayer = null;
+
+// Calcula distância entre dois pontos (fórmula de Haversine), em km
+function distanciaKm(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+async function verTrajetoDoDia(deviceId, dataEscolhidaStr) {
+  // dataEscolhidaStr vem do <input type="date">, formato "AAAA-MM-DD"
+  const inicio = new Date(dataEscolhidaStr + "T00:00:00");
+  const fim = new Date(dataEscolhidaStr + "T23:59:59");
+
+  const diaSemana = inicio.getDay(); // 0=domingo ... 1=segunda ... 4=quinta
+  if (diaSemana < 1 || diaSemana > 4) {
+    $("resumoDia").textContent = "Esse aparelho só registra rota de segunda a quinta — não há dados para esse dia.";
+    return;
+  }
+
+  const { data, error } = await supabase
+    .from("localizacoes")
+    .select("latitude, longitude, velocidade_kmh, capturado_em")
+    .eq("device_id", deviceId)
+    .gte("capturado_em", inicio.toISOString())
+    .lte("capturado_em", fim.toISOString())
+    .order("capturado_em", { ascending: true });
+
+  if (error || !data || data.length === 0) {
+    $("resumoDia").textContent = "Sem pontos registrados nesse dia para este aparelho (lembrando: o histórico é apagado automaticamente depois de 1 mês e 10 dias).";
+    return;
+  }
+
+  if (trajetoLayer) leafletMap.removeLayer(trajetoLayer);
+  const pontos = data.map((p) => [p.latitude, p.longitude]);
+  trajetoLayer = L.polyline(pontos, { color: "#4f8cff" }).addTo(leafletMap);
+  leafletMap.fitBounds(trajetoLayer.getBounds(), { padding: [30, 30] });
+
+  // Distância total percorrida
+  let distanciaTotal = 0;
+  for (let i = 1; i < data.length; i++) {
+    distanciaTotal += distanciaKm(
+      data[i - 1].latitude, data[i - 1].longitude,
+      data[i].latitude, data[i].longitude
+    );
+  }
+
+  // Tempo "andando" (considerando andando quando velocidade > 2 km/h entre
+  // dois pontos consecutivos — aproximação, já que os pontos são a cada 5 min)
+  let minutosAndando = 0;
+  for (let i = 1; i < data.length; i++) {
+    const v = data[i].velocidade_kmh ?? 0;
+    if (v > 2) {
+      const diffMs = new Date(data[i].capturado_em) - new Date(data[i - 1].capturado_em);
+      minutosAndando += diffMs / 60000;
+    }
+  }
+
+  const velocidades = data.map((p) => p.velocidade_kmh ?? 0);
+  const velMedia = velocidades.reduce((a, b) => a + b, 0) / velocidades.length;
+  const velMax = Math.max(...velocidades);
+
+  $("resumoDia").innerHTML = `
+    <b>Resumo de ${dataEscolhidaStr}:</b>
+    ${pontos.length} pontos registrados ·
+    ${distanciaTotal.toFixed(1)} km percorridos ·
+    ~${Math.round(minutosAndando)} min em movimento ·
+    velocidade média ${velMedia.toFixed(0)} km/h, máxima ${velMax.toFixed(0)} km/h
+  `;
+}
+</script>
+</body>
+</html>

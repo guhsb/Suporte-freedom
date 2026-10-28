@@ -1,0 +1,12 @@
+{
+  "name": "freedom-remote-signaling",
+  "version": "0.1.0",
+  "description": "Servidor de sinalização WebRTC para acesso remoto aos celulares da frota",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

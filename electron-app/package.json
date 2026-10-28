@@ -1,0 +1,28 @@
+{
+  "name": "freedom-remote-control",
+  "version": "0.1.0",
+  "description": "Suporte Remoto Freedom — versão desktop",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder"
+  },
+  "devDependencies": {
+    "electron": "^31.3.1",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "br.com.cbfreedom.remotecontrol",
+    "productName": "Freedom Suporte Remoto",
+    "files": ["main.js", "index.html"],
+    "win": {
+      "target": "nsis"
+    },
+    "mac": {
+      "target": "dmg"
+    },
+    "linux": {
+      "target": "AppImage"
+    }
+  }
+}

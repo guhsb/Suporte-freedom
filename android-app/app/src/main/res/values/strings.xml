@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Freedom Suporte Remoto</string>
+    <string name="accessibility_service_description">
+        Permite que o suporte técnico da Freedom execute toques e gestos
+        neste aparelho durante uma sessão de suporte remoto autorizada.
+    </string>
+    <string name="notif_sessao_ativa">Suporte remoto Freedom ativo</string>
+</resources>
