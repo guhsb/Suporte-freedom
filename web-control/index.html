@@ -450,8 +450,14 @@ async function abrirMapaFrota() {
 
   if (!leafletMap) {
     leafletMap = L.map("mapaFrota").setView([-23.55, -46.63], 11); // ponto inicial: SP
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      attribution: "&copy; OpenStreetMap",
+    // Usa o CartoDB em vez do tile.openstreetmap.org direto: o OSM bloqueia
+    // (erro 403) acesso vindo de um arquivo local/app desktop embutido assim,
+    // por política deles (ver osm.wiki/Blocked) — o CartoDB aceita esse uso
+    // sem precisar de chave de API.
+    L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
+      attribution: "&copy; OpenStreetMap &copy; CARTO",
+      subdomains: "abcd",
+      maxZoom: 19,
     }).addTo(leafletMap);
     setTimeout(() => leafletMap.invalidateSize(), 200);
   }

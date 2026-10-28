@@ -1,0 +1,39 @@
+name: Build do app Android (APK)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "android-app/**"
+      - ".github/workflows/build-android.yml"
+  workflow_dispatch: {}
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android-app
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Instalar o Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Instalar o Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Gerar o APK de debug
+        run: gradle :app:assembleDebug
+
+      - name: Publicar o APK como artefato do workflow
+        uses: actions/upload-artifact@v4
+        with:
+          name: freedom-suporte-remoto-android
+          path: android-app/app/build/outputs/apk/debug/*.apk

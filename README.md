@@ -136,6 +136,16 @@ Se o objetivo é reduzir o atrito com os funcionários, o caminho mais seguro
 avisando que o suporte técnico pode acessar o aparelho remotamente — e não
 tentar tornar isso invisível.
 
+## Mapa da frota: por que CartoDB e não OpenStreetMap direto
+
+O fundo do mapa usa tiles do CartoDB (`basemaps.cartocdn.com`), não do
+`tile.openstreetmap.org` direto. O OSM **bloqueia** (erro 403, "Access
+blocked") pedidos vindos de um arquivo local ou de um app desktop embutido
+assim, por política de uso deles (veja `osm.wiki/Blocked`) — não é algo
+que dá pra contornar, é deliberado da parte deles. O CartoDB é gratuito,
+não pede chave de API, e é o que a maioria dos dashboards usa exatamente
+por causa dessa restrição.
+
 ## Configurar o Supabase
 
 1. Crie um projeto em supabase.com (tem plano free).
@@ -145,6 +155,20 @@ tentar tornar isso invisível.
    (já vem por padrão para canais Broadcast/Presence, não precisa de tabela).
 4. (Opcional) Rode `supabase/schema.sql` no SQL Editor se quiser registrar
    os aparelhos da frota e um histórico de sessões.
+
+## Gerar o APK sem Android Studio
+
+Igual ao `.exe`, o APK também é compilado sozinho pelo GitHub Actions a
+cada push que mexer em `android-app/` — não precisa instalar Android
+Studio em lugar nenhum. O workflow
+`.github/workflows/build-android.yml` compila num runner Linux do
+próprio GitHub e deixa o APK pronto em **Actions > (o workflow que
+rodou) > Artifacts**, com o nome `freedom-suporte-remoto-android`.
+
+Esse APK é de **debug** (não assinado para loja/produção) — serve pra
+testar nos aparelhos da frota via Headwind ou instalação direta, mas se
+um dia quiser publicar numa loja própria, precisa de uma chave de
+assinatura separada.
 
 ## Como testar
 

@@ -17,6 +17,7 @@
     <application
         android:label="Freedom Suporte Remoto"
         android:icon="@mipmap/ic_launcher"
+        android:theme="@style/AppTheme"
         android:allowBackup="false">
 
         <activity
