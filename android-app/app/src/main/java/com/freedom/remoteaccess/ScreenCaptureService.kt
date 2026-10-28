@@ -7,7 +7,6 @@ import android.media.projection.MediaProjectionManager
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
-import io.getstream.webrtc.android.*
 import org.json.JSONObject
 import org.webrtc.*
 
@@ -148,6 +147,7 @@ class ScreenCaptureService : Service() {
             }
 
             override fun onIceConnectionChange(state: PeerConnection.IceConnectionState?) {}
+            override fun onIceConnectionReceivingChange(receiving: Boolean) {}
             override fun onConnectionChange(state: PeerConnection.PeerConnectionState?) {}
             override fun onSignalingChange(state: PeerConnection.SignalingState?) {}
             override fun onIceGatheringChange(state: PeerConnection.IceGatheringState?) {}
